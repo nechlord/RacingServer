@@ -75,7 +75,6 @@
             <!-- 카드 컨테이너 -->
             <div id="card-area" class="w-full max-w-md flex flex-col gap-6 mt-4"></div>
 
-            <!-- 리셋 버튼 (게임 종료 시에만 나타남) -->
             <button id="btn-back-lobby" class="hidden w-full max-w-xs py-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-bold text-xl shadow-[0_5px_0_#374151,0_10px_15px_rgba(0,0,0,0.5)] active:translate-y-2 active:shadow-[0_0px_0_#374151,0_5px_10px_rgba(0,0,0,0.5)] transition-all mt-4 mb-8">
                 준비 화면으로 돌아가기
             </button>
@@ -86,11 +85,9 @@
         const socket = io();
         let selectedColor = null;
         let selectedColorName = null;
-        let targetCardCount = 2; 
-
-        // 전역 상태 관리
+        
         let selectedValues = []; 
-        let isRowLocked = []; // 각 줄을 선택했는지 여부
+        let isRowLocked = []; 
         let isSubmitted = false;
 
         const viewLobby = document.getElementById('view-lobby');
@@ -117,7 +114,6 @@
             socket.emit('join_game', { name: nickname, color: selectedColorName });
         });
 
-        // 폰에서 처음으로 돌아가기 클릭 시
         btnBackLobby.addEventListener('click', () => {
             socket.emit('tv_state_change', { state: 'BACK_TO_LOBBY' });
         });
@@ -136,29 +132,19 @@
             btnBackLobby.classList.add('hidden');
         });
 
-        // ================= 초고속 카드 생성 및 선택 로직 =================
-        function generateCards(rowCount) {
+        // ================= TV에서 전달받은 카드 데이터로 화면 생성 =================
+        function renderCards(cardsData) {
             cardArea.innerHTML = '';
-            selectedValues = new Array(rowCount).fill(null);
-            isRowLocked = new Array(rowCount).fill(false);
+            selectedValues = new Array(cardsData.length).fill(null);
+            isRowLocked = new Array(cardsData.length).fill(false);
             isSubmitted = false;
 
-            for(let i=0; i<rowCount; i++) {
-                let values = [1, 2, 3, 4, 5, 6];
-                values.sort(() => Math.random() - 0.5);
-
-                let revealIndices = [];
-                while(revealIndices.length < 2) {
-                    let r = Math.floor(Math.random() * 6);
-                    if(!revealIndices.includes(r)) revealIndices.push(r);
-                }
-
+            cardsData.forEach((rowData, i) => {
                 let rowDiv = document.createElement('div');
                 rowDiv.className = 'flex justify-between w-full gap-2 px-1';
 
-                for(let j=0; j<6; j++) {
-                    let cardVal = values[j];
-                    let isRevealed = revealIndices.includes(j); 
+                rowData.values.forEach((cardVal, j) => {
+                    let isRevealed = rowData.revealed.includes(j); 
                     
                     let card = document.createElement('div');
                     card.className = `card-container flex-1 aspect-[2/3] cursor-pointer group rounded-lg transition-all duration-200 ${isRevealed ? 'flipped' : ''}`;
@@ -178,18 +164,13 @@
                     inner.appendChild(frontFace);
                     card.appendChild(inner);
 
-                    // 클릭 이벤트
                     card.onclick = () => {
                         if (isSubmitted || isRowLocked[i]) return;
                         if (navigator.vibrate) navigator.vibrate(50);
 
-                        // 1. 해당 줄(Row) 잠금
                         isRowLocked[i] = true;
-
-                        // 2. 카드를 강제로 뒤집고 강력한 하이라이트 효과
                         card.classList.add('flipped', 'ring-4', 'ring-yellow-400', 'scale-110', 'z-10');
 
-                        // 3. 고르지 않은 다른 카드들은 어둡게 처리
                         Array.from(rowDiv.children).forEach(c => {
                             if (c !== card) {
                                 c.style.opacity = '0.3';
@@ -197,27 +178,28 @@
                             }
                         });
 
-                        selectedValues[i] = { element: card, val: cardVal };
-                        checkAllSelected(); // 모두 골랐는지 자동 확인
+                        selectedValues[i] = { element: card, val: cardVal, idx: j };
+                        checkAllSelected(cardsData); 
                     };
 
                     rowDiv.appendChild(card);
-                }
+                });
                 cardArea.appendChild(rowDiv);
-            }
+            });
         }
 
-        // ================= 카드 모두 선택 시 자동 전송 로직 =================
-        function checkAllSelected() {
+        function checkAllSelected(cardsData) {
             if (selectedValues.every(item => item !== null)) {
                 isSubmitted = true;
                 let total = 0;
+                let indices = [];
                 
-                // 선택을 마친 후 나머지 숨겨져 있던 카드들도 뒤집어서 공개해줌 (아쉬움 유발)
                 Array.from(cardArea.children).forEach((rowDiv, rowIndex) => {
                     let selectedItem = selectedValues[rowIndex];
                     total += selectedItem.val;
+                    indices.push(selectedItem.idx);
 
+                    // 폰에서도 나머지 카드 뒤집어서 공개
                     Array.from(rowDiv.children).forEach(cardElem => {
                         if (!cardElem.classList.contains('flipped')) {
                             cardElem.classList.add('flipped');
@@ -227,15 +209,18 @@
 
                 turnStatus.innerHTML = `<span class='text-yellow-400 text-4xl font-black'>합계: ${total}</span><br><span class='text-sm text-gray-400 mt-2 block'>결과 확인 중...</span>`;
 
-                // 제출 버튼 없이 0.8초 딜레이 후 아주 빠르게 서버로 자동 전송
                 setTimeout(() => {
-                    socket.emit('player_rolled', { name: document.getElementById('my-name').innerText, total: total });
-                    turnStatus.innerHTML = `<span class='text-yellow-400 text-4xl font-black'>합계: ${total}</span><br><span class='text-sm text-gray-400 mt-2 block'>다른 플레이어 대기 중...</span>`;
+                    socket.emit('player_rolled', { 
+                        name: document.getElementById('my-name').innerText, 
+                        total: total,
+                        selected_indices: indices // 고도엔진에 내가 고른 카드 위치 전송
+                    });
+                    turnStatus.innerHTML = `<span class='text-yellow-400 text-4xl font-black'>합계: ${total}</span><br><span class='text-sm text-gray-400 mt-2 block'>다른 플레이어 턴 대기 중...</span>`;
                 }, 800);
             }
         }
 
-        // ================= TV 상태 동기화 =================
+        // ================= TV 상태 동기화 (턴 시스템 적용) =================
         socket.on('tv_state_change', (data) => {
             let stateObj = data;
             if (typeof data === 'string') {
@@ -243,19 +228,26 @@
             }
 
             if (stateObj.state === 'READY') {
-                targetCardCount = stateObj.dice_count || 2; 
-                generateCards(targetCardCount);
-                turnStatus.innerHTML = "<span class='text-yellow-400 text-2xl font-bold'>각 줄에서 카드를 1장씩 뽑으세요!</span>";
+                let myName = document.getElementById('my-name').innerText;
                 btnBackLobby.classList.add('hidden');
                 
+                // 내 턴일 때만 카드 UI 활성화
+                if (stateObj.current_player === myName) {
+                    renderCards(stateObj.cards);
+                    turnStatus.innerHTML = "<span class='text-yellow-400 text-2xl font-bold'>당신의 턴입니다!<br>줄마다 카드를 1장 뽑으세요.</span>";
+                } else {
+                    cardArea.innerHTML = ''; // 남의 턴에는 카드 숨김
+                    turnStatus.innerHTML = `<span class='text-yellow-400 text-3xl font-black'>${stateObj.current_player}</span><span class='text-gray-400 text-xl'><br>님의 턴 진행 중!<br>TV 화면을 확인하세요.</span>`;
+                }
+                
             } else if (stateObj.state === 'MOVING') {
-                turnStatus.innerHTML = "<span class='text-white text-3xl font-black'>출발!!!</span><br><span class='text-gray-400 text-sm mt-2 block'>TV 화면을 주목하세요</span>";
+                turnStatus.innerHTML = "<span class='text-white text-3xl font-black'>질주 중!!!</span><br><span class='text-gray-400 text-sm mt-2 block'>TV 화면을 주목하세요</span>";
                 btnBackLobby.classList.add('hidden');
                 
             } else if (stateObj.state === 'GAME_OVER') {
                 turnStatus.innerHTML = "<span class='text-white'>게임이 종료되었습니다!<br>TV 화면을 확인하세요.</span>";
                 cardArea.innerHTML = ''; 
-                btnBackLobby.classList.remove('hidden'); // 게임 끝나면 처음으로 돌아가기 버튼 표시
+                btnBackLobby.classList.remove('hidden'); 
                 
             } else if (stateObj.state === 'BACK_TO_LOBBY') {
                 viewPlay.classList.add('hidden');
