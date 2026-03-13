@@ -1,4 +1,3 @@
-<!-- 파일명: index.html (스마트폰 컨트롤러 화면) -->
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -9,7 +8,6 @@
     <script src="/socket.io/socket.io.js"></script>
     <style>
         body { -webkit-tap-highlight-color: transparent; user-select: none; }
-        .color-btn.selected { border: 4px solid #fff; box-shadow: 0 0 15px rgba(255,255,255,0.8); transform: scale(1.1); }
         
         /* 카드 3D 뒤집기 효과용 CSS */
         .card-container { perspective: 1000px; }
@@ -34,37 +32,35 @@
 </head>
 <body class="bg-gray-900 text-white h-screen flex flex-col font-sans overflow-hidden">
 
-    <!-- 화면 1: 로비 -->
+    <!-- 화면 1: 로비 (이름만 입력) -->
     <div id="view-lobby" class="flex-1 flex flex-col items-center justify-center p-6 space-y-6">
         <h1 class="text-4xl font-bold text-yellow-400 mb-4 tracking-wider">RACING BOARDS</h1>
         
         <div class="w-full max-w-sm space-y-2">
             <label class="text-gray-300 text-sm">닉네임</label>
-            <input type="text" id="nickname" maxlength="8" placeholder="이름을 입력하세요" class="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-600 text-white focus:outline-none focus:border-yellow-400 text-lg text-center">
+            <input type="text" id="nickname" maxlength="8" placeholder="이름을 입력하세요" class="w-full px-4 py-4 rounded-lg bg-gray-800 border border-gray-600 text-white focus:outline-none focus:border-yellow-400 text-xl text-center shadow-inner">
         </div>
 
-        <div class="w-full max-w-sm space-y-3">
-            <label class="text-gray-300 text-sm">차량 색상 선택</label>
-            <div class="grid grid-cols-3 gap-4" id="color-grid">
-                <button class="color-btn h-16 rounded-xl bg-[#1E90FF] shadow-lg transition-transform" data-color="blue" data-name="청색(Blue)"></button>
-                <button class="color-btn h-16 rounded-xl bg-[#DC143C] shadow-lg transition-transform" data-color="red" data-name="적색(Red)"></button>
-                <button class="color-btn h-16 rounded-xl bg-[#FFFFFF] shadow-lg transition-transform" data-color="white" data-name="백색(White)"></button>
-                <button class="color-btn h-16 rounded-xl bg-[#8A2BE2] shadow-lg transition-transform" data-color="purple" data-name="보라(Purple)"></button>
-                <button class="color-btn h-16 rounded-xl bg-[#2F4F4F] shadow-lg transition-transform" data-color="black" data-name="흑색(Black)"></button>
-                <button class="color-btn h-16 rounded-xl bg-[#FFD700] shadow-lg transition-transform" data-color="yellow" data-name="황색(Yellow)"></button>
-            </div>
-        </div>
-
-        <button id="btn-join" class="w-full max-w-sm py-4 mt-8 rounded-full bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold text-xl shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all">
-            게임 접속하기
+        <button id="btn-start-select" class="w-full max-w-sm py-4 mt-8 rounded-full bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold text-xl shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all">
+            차량 뽑기 시작
         </button>
+    </div>
+
+    <!-- 화면 1.5: 탑승 차량 무작위 카드 뽑기 -->
+    <div id="view-car-select" class="flex-1 flex flex-col items-center justify-center p-4 hidden">
+        <h2 class="text-2xl font-bold text-yellow-400 mb-2">차량 키 뽑기</h2>
+        <p class="text-gray-300 text-sm mb-8 text-center">원하는 카드를 한 장 선택하세요.<br>무작위로 탑승할 차량이 결정됩니다!</p>
+        
+        <div id="car-cards-grid" class="grid grid-cols-5 gap-3 w-full max-w-md">
+            <!-- 자바스크립트에서 10장의 뒤집힌 카드가 생성됨 -->
+        </div>
     </div>
 
     <!-- 화면 2: 플레이 화면 -->
     <div id="view-play" class="flex-1 flex flex-col hidden">
         <div class="bg-gray-800 p-4 flex justify-between items-center border-b border-gray-700 shadow-md z-10">
             <div class="font-bold text-lg" id="my-name">내 이름</div>
-            <div id="my-color-badge" class="w-6 h-6 rounded-full border-2 border-white"></div>
+            <div id="my-car-badge" class="w-8 h-8 rounded-full bg-yellow-500 text-black font-black flex items-center justify-center border-2 border-white shadow-sm">?</div>
         </div>
 
         <div class="flex-1 flex flex-col items-center justify-start p-4 space-y-4 overflow-y-auto">
@@ -72,9 +68,13 @@
                 <span>TV 대화면을 보고<br>게임 시작을 기다려주세요!</span>
             </div>
 
-            <!-- 카드 컨테이너 -->
+            <!-- 카드 컨테이너 (주사위) -->
             <div id="card-area" class="w-full max-w-md flex flex-col gap-6 mt-4"></div>
 
+            <!-- 다음 라운드 진행 / 로비 복귀 버튼 -->
+            <button id="btn-next-round" class="hidden w-full max-w-xs py-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xl shadow-[0_5px_0_#2563eb,0_10px_15px_rgba(0,0,0,0.5)] active:translate-y-2 active:shadow-[0_0px_0_#2563eb,0_5px_10px_rgba(0,0,0,0.5)] transition-all mt-4">
+                ▶️ 다음 라운드 진행
+            </button>
             <button id="btn-back-lobby" class="hidden w-full max-w-xs py-4 rounded-xl bg-gray-700 hover:bg-gray-600 text-white font-bold text-xl shadow-[0_5px_0_#374151,0_10px_15px_rgba(0,0,0,0.5)] active:translate-y-2 active:shadow-[0_0px_0_#374151,0_5px_10px_rgba(0,0,0,0.5)] transition-all mt-4 mb-8">
                 준비 화면으로 돌아가기
             </button>
@@ -83,56 +83,125 @@
 
     <script>
         const socket = io();
-        let selectedColor = null;
-        let selectedColorName = null;
         
         let selectedValues = []; 
         let isRowLocked = []; 
         let isSubmitted = false;
 
         const viewLobby = document.getElementById('view-lobby');
+        const viewCarSelect = document.getElementById('view-car-select');
         const viewPlay = document.getElementById('view-play');
-        const colorBtns = document.querySelectorAll('.color-btn');
-        const btnJoin = document.getElementById('btn-join');
+        const carCardsGrid = document.getElementById('car-cards-grid');
+        
+        const btnStartSelect = document.getElementById('btn-start-select');
         const btnBackLobby = document.getElementById('btn-back-lobby');
+        const btnNextRound = document.getElementById('btn-next-round');
+        
         const turnStatus = document.getElementById('turn-status');
         const cardArea = document.getElementById('card-area');
 
-        colorBtns.forEach(btn => {
-            btn.addEventListener('click', () => {
-                colorBtns.forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                selectedColor = btn.dataset.color;
-                selectedColorName = btn.dataset.name;
-            });
-        });
-
-        btnJoin.addEventListener('click', () => {
+        // [추가] 1. 이름 입력 후 '차량 뽑기' 화면으로 진입
+        btnStartSelect.addEventListener('click', () => {
             const nickname = document.getElementById('nickname').value.trim();
             if (!nickname) return alert("닉네임을 입력해주세요!");
-            if (!selectedColor) return alert("차량 색상을 선택해주세요!");
-            socket.emit('join_game', { name: nickname, color: selectedColorName });
-        });
-
-        btnBackLobby.addEventListener('click', () => {
-            socket.emit('tv_state_change', { state: 'BACK_TO_LOBBY' });
-        });
-
-        socket.on('join_success', (data) => {
-            document.getElementById('my-name').innerText = data.name;
-            const badge = document.getElementById('my-color-badge');
-            badge.style.backgroundColor = document.querySelector(`.color-btn[data-color="${selectedColor}"]`).style.backgroundColor; 
             
             viewLobby.classList.add('hidden');
+            viewCarSelect.classList.remove('hidden');
+            viewCarSelect.classList.add('flex');
+            
+            renderCarSelectionCards(nickname);
+        });
+
+        // [추가] 2. 차량 뽑기용 10장 뒷면 카드 렌더링
+        function renderCarSelectionCards(nickname) {
+            carCardsGrid.innerHTML = '';
+            
+            // 0번부터 9번까지 차량 번호(인덱스) 생성 및 무작위 셔플
+            let availableCars = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+            availableCars.sort(() => Math.random() - 0.5);
+            
+            let hasPicked = false;
+
+            for (let i = 0; i < 10; i++) {
+                let card = document.createElement('div');
+                card.className = 'card-container aspect-[2/3] cursor-pointer group rounded-lg';
+                
+                let inner = document.createElement('div');
+                inner.className = 'card-inner rounded-lg shadow-md';
+                
+                // 뒷면 (물음표)
+                let backFace = document.createElement('div');
+                backFace.className = 'card-face card-face-down bg-gradient-to-br from-blue-600 to-indigo-800 rounded-lg border-2 border-indigo-400 flex items-center justify-center';
+                backFace.innerHTML = `<span class="text-indigo-200 opacity-60 text-2xl font-black">?</span>`;
+
+                // 앞면 (차량 번호)
+                let frontFace = document.createElement('div');
+                frontFace.className = 'card-face card-face-up bg-white rounded-lg border-4 border-yellow-400 flex items-center justify-center';
+                
+                let carIndex = availableCars[i];
+                let displayCarNum = carIndex + 1; // 화면엔 1~10으로 표시
+                frontFace.innerHTML = `<span class="text-3xl font-black text-gray-900">${displayCarNum}</span>`;
+
+                inner.appendChild(backFace);
+                inner.appendChild(frontFace);
+                card.appendChild(inner);
+
+                // 카드 클릭 이벤트
+                card.onclick = () => {
+                    if (hasPicked) return;
+                    hasPicked = true;
+                    if (navigator.vibrate) navigator.vibrate(50);
+
+                    // 카드 뒤집기 애니메이션
+                    card.classList.add('flipped', 'ring-4', 'ring-yellow-400', 'scale-110', 'z-10');
+
+                    // 선택 안된 나머지 카드들은 흐리게 처리
+                    Array.from(carCardsGrid.children).forEach(c => {
+                        if (c !== card) {
+                            c.style.opacity = '0.3';
+                            c.style.pointerEvents = 'none';
+                        }
+                    });
+
+                    // 카드 확인 후 서버로 조인 정보 전송
+                    setTimeout(() => {
+                        // Godot 메인에서 무시되지만 하위 호환을 위해 color 전달, 결정된 car_index 전달
+                        socket.emit('join_game', { name: nickname, color: "Random", car_index: carIndex });
+                    }, 1200);
+                };
+                carCardsGrid.appendChild(card);
+            }
+        }
+
+        // 3. 서버 접속 성공 처리
+        socket.on('join_success', (data) => {
+            document.getElementById('my-name').innerText = data.name;
+            
+            // 배정받은 차량 번호 뱃지 표시
+            const badge = document.getElementById('my-car-badge');
+            if(data.car_index !== undefined) badge.innerText = (data.car_index + 1);
+            else badge.innerText = "차량";
+            
+            viewCarSelect.classList.add('hidden');
+            viewCarSelect.classList.remove('flex');
             viewPlay.classList.remove('hidden');
             viewPlay.classList.add('flex');
             
             turnStatus.innerHTML = "<span class='text-gray-400'>TV 대화면을 보고<br>게임 시작을 기다려주세요!</span>";
             cardArea.innerHTML = ''; 
             btnBackLobby.classList.add('hidden');
+            btnNextRound.classList.add('hidden');
         });
 
-        // ================= TV에서 전달받은 카드 데이터로 화면 생성 =================
+        // [수정] 4. 다음 라운드 / 로비 나가기 버튼 동작
+        btnNextRound.addEventListener('click', () => {
+            socket.emit('tv_state_change', { state: 'NEXT_ROUND' });
+        });
+        btnBackLobby.addEventListener('click', () => {
+            socket.emit('tv_state_change', { state: 'BACK_TO_LOBBY' });
+        });
+
+        // ================= TV에서 전달받은 카드 데이터로 주사위 화면 생성 =================
         function renderCards(cardsData) {
             cardArea.innerHTML = '';
             selectedValues = new Array(cardsData.length).fill(null);
@@ -199,7 +268,6 @@
                     total += selectedItem.val;
                     indices.push(selectedItem.idx);
 
-                    // 폰에서도 나머지 카드 뒤집어서 공개
                     Array.from(rowDiv.children).forEach(cardElem => {
                         if (!cardElem.classList.contains('flipped')) {
                             cardElem.classList.add('flipped');
@@ -213,7 +281,7 @@
                     socket.emit('player_rolled', { 
                         name: document.getElementById('my-name').innerText, 
                         total: total,
-                        selected_indices: indices // 고도엔진에 내가 고른 카드 위치 전송
+                        selected_indices: indices 
                     });
                     turnStatus.innerHTML = `<span class='text-yellow-400 text-4xl font-black'>합계: ${total}</span><br><span class='text-sm text-gray-400 mt-2 block'>다른 플레이어 턴 대기 중...</span>`;
                 }, 800);
@@ -230,31 +298,40 @@
             if (stateObj.state === 'READY') {
                 let myName = document.getElementById('my-name').innerText;
                 btnBackLobby.classList.add('hidden');
+                btnNextRound.classList.add('hidden');
                 
-                // 내 턴일 때만 카드 UI 활성화
                 if (stateObj.current_player === myName) {
                     renderCards(stateObj.cards);
                     turnStatus.innerHTML = "<span class='text-yellow-400 text-2xl font-bold'>당신의 턴입니다!<br>줄마다 카드를 1장 뽑으세요.</span>";
                 } else {
-                    cardArea.innerHTML = ''; // 남의 턴에는 카드 숨김
+                    cardArea.innerHTML = ''; 
                     turnStatus.innerHTML = `<span class='text-yellow-400 text-3xl font-black'>${stateObj.current_player}</span><span class='text-gray-400 text-xl'><br>님의 턴 진행 중!<br>TV 화면을 확인하세요.</span>`;
                 }
                 
             } else if (stateObj.state === 'MOVING') {
                 turnStatus.innerHTML = "<span class='text-white text-3xl font-black'>질주 중!!!</span><br><span class='text-gray-400 text-sm mt-2 block'>TV 화면을 주목하세요</span>";
                 btnBackLobby.classList.add('hidden');
+                btnNextRound.classList.add('hidden');
+                
+            } else if (stateObj.state === 'ROUND_OVER') { // [추가] 중간 라운드 종료 상태
+                turnStatus.innerHTML = "<span class='text-white'>라운드가 종료되었습니다!<br>TV 화면을 확인하세요.</span>";
+                cardArea.innerHTML = ''; 
+                btnNextRound.classList.remove('hidden'); // 다음 라운드 진행 버튼 활성화
+                btnBackLobby.classList.remove('hidden');
                 
             } else if (stateObj.state === 'GAME_OVER') {
-                turnStatus.innerHTML = "<span class='text-white'>게임이 종료되었습니다!<br>TV 화면을 확인하세요.</span>";
+                turnStatus.innerHTML = "<span class='text-white'>모든 레이스가 종료되었습니다!<br>최종 결과를 확인하세요.</span>";
                 cardArea.innerHTML = ''; 
+                btnNextRound.classList.add('hidden'); 
                 btnBackLobby.classList.remove('hidden'); 
                 
             } else if (stateObj.state === 'BACK_TO_LOBBY') {
                 viewPlay.classList.add('hidden');
                 viewPlay.classList.remove('flex');
                 viewLobby.classList.remove('hidden');
-                btnJoin.innerText = '준비 완료 (다시 참가)';
+                document.getElementById('nickname').value = ''; // 이름 초기화
                 btnBackLobby.classList.add('hidden');
+                btnNextRound.classList.add('hidden');
             }
         });
     </script>
